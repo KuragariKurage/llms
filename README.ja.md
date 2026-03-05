@@ -23,19 +23,28 @@ Copied: anthropic/claude-sonnet-4-6
 ### 前提条件
 
 - Python 3.13+
-- [fzf](https://github.com/junegunn/fzf)
-- [uv](https://github.com/astral-sh/uv)
+- [fzf](https://github.com/junegunn/fzf)（インタラクティブモード用）
 
-### クイックインストール
+### インストール
 
 ```bash
-./install.sh
+# uv（推奨）
+uv tool install -e .
+
+# pipx
+pipx install -e .
+
+# pip
+pip install -e .
 ```
 
-### 手動インストール
+または `./install.sh` を実行すると、利用可能なインストーラを自動検出します。
+
+#### GitHub から直接インストール（clone 不要）
 
 ```bash
-uv tool install -e .
+uv tool install git+https://github.com/atsuya.sakata/llm-models.git
+pipx install git+https://github.com/atsuya.sakata/llm-models.git
 ```
 
 これで `llms` コマンドがどこからでも使えるようになります。
