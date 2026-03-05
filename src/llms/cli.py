@@ -20,6 +20,13 @@ def _add_output_flags(parser: argparse.ArgumentParser) -> None:
 def _add_filter_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("-p", "--provider", help="Filter by provider")
     parser.add_argument(
+        "-a",
+        "--all",
+        action="store_true",
+        dest="all_providers",
+        help="Show models from all providers (default: major providers only)",
+    )
+    parser.add_argument(
         "--cap",
         action="append",
         dest="caps",
@@ -59,6 +66,7 @@ def _build_query(args: argparse.Namespace) -> Any:
         max_input_cost=getattr(args, "max_input_cost", None),
         sort=getattr(args, "sort", None),
         limit=getattr(args, "limit", None),
+        all_providers=getattr(args, "all_providers", False),
     )
 
 
@@ -160,6 +168,7 @@ def _run_search(args: argparse.Namespace) -> None:
         max_input_cost=query.max_input_cost,
         sort=query.sort,
         limit=query.limit,
+        all_providers=query.all_providers,
     )
     models = client.search(args.query, query)
     _print_models(models, args)
@@ -196,12 +205,26 @@ def main() -> None:
     )
     parser.add_argument("--jsonl", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("-p", "--provider", help="Filter by provider")
+    parser.add_argument(
+        "-a",
+        "--all",
+        action="store_true",
+        dest="all_providers",
+        help="Show models from all providers",
+    )
 
     subparsers = parser.add_subparsers(dest="command")
 
     # pick subcommand
     pick_parser = subparsers.add_parser("pick", help="Interactive fzf model picker")
     pick_parser.add_argument("-p", "--provider", help="Filter by provider")
+    pick_parser.add_argument(
+        "-a",
+        "--all",
+        action="store_true",
+        dest="all_providers",
+        help="Show models from all providers",
+    )
     pick_parser.add_argument(
         "--no-copy",
         action="store_true",

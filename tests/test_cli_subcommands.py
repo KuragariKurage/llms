@@ -127,7 +127,7 @@ class TestGetSubcommand:
 class TestListSubcommand:
     def test_listサブコマンドでモデル一覧(self, capsys):
         # Arrange
-        args = ["list", "--json"]
+        args = ["list", "--all", "--json"]
 
         # Act
         out, _, exit_code = _run_cli(args, capsys)
@@ -165,7 +165,7 @@ class TestListSubcommand:
 
     def test_listでmax_input_costフィルタ(self, capsys):
         # Arrange
-        args = ["list", "--max-input-cost", "3.0", "--json"]
+        args = ["list", "--all", "--max-input-cost", "3.0", "--json"]
 
         # Act
         out, _, exit_code = _run_cli(args, capsys)

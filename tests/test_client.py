@@ -108,7 +108,7 @@ class TestClient:
         client = Client()
 
         # Act
-        models = client.list()
+        models = client.list(Query(all_providers=True))
 
         # Assert
         assert len(models) == 4

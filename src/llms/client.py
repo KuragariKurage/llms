@@ -46,6 +46,7 @@ class Client:
             max_input_cost=query.max_input_cost,
             sort=query.sort,
             limit=query.limit,
+            all_providers=query.all_providers,
         )
         models = self._all_models(provider=query.provider)
         return filter_models(models, query)

@@ -3,6 +3,41 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+# First-party model creators and major inference platforms.
+# Aggregators/resellers (bedrock, azure, openrouter, kilo, vercel, etc.)
+# are excluded by default — use --all to include them.
+DEFAULT_PROVIDERS: frozenset[str] = frozenset(
+    {
+        # First-party model creators
+        "alibaba",
+        "anthropic",
+        "bailing",
+        "cohere",
+        "deepseek",
+        "google",
+        "inception",
+        "llama",
+        "minimax",
+        "mistral",
+        "moonshotai",
+        "nova",
+        "nvidia",
+        "openai",
+        "perplexity",
+        "stepfun",
+        "upstage",
+        "xai",
+        "xiaomi",
+        "zhipuai",
+        # Major inference platforms
+        "cerebras",
+        "fireworks-ai",
+        "groq",
+        "huggingface",
+        "togetherai",
+    }
+)
+
 
 @dataclass
 class Query:
@@ -15,6 +50,7 @@ class Query:
     max_input_cost: float | None = None  # max $/1M input tokens
     sort: str | None = None  # field path like "cost.input", "limit.context"
     limit: int | None = None
+    all_providers: bool = False  # if True, don't filter by DEFAULT_PROVIDERS
 
 
 def _parse_token_count(value: str) -> int:
@@ -44,6 +80,8 @@ def filter_models(models: list[dict[str, Any]], query: Query) -> list[dict[str, 
 
     if query.provider:
         result = [m for m in result if m.get("provider_id") == query.provider]
+    elif not query.all_providers:
+        result = [m for m in result if m.get("provider_id") in DEFAULT_PROVIDERS]
 
     if query.text:
         text_lower = query.text.lower()

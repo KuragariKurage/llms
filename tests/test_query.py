@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from llms.query import Query, _get_nested, _parse_token_count, filter_models
+from llms.query import (
+    DEFAULT_PROVIDERS,
+    Query,
+    _get_nested,
+    _parse_token_count,
+    filter_models,
+)
 
 SAMPLE_MODELS = [
     {
@@ -147,7 +153,7 @@ class TestFilterModels:
 
     def test_テキスト検索でnameにマッチする(self):
         # Arrange
-        query = Query(text="Llama")
+        query = Query(text="Llama", all_providers=True)
 
         # Act
         result = filter_models(SAMPLE_MODELS, query)
@@ -170,7 +176,7 @@ class TestFilterModels:
     def test_複数ケイパビリティはAND条件(self):
         # Arrange
         # tool_call=True AND open_weights=True => only llama
-        query = Query(caps=["tool_call", "open_weights"])
+        query = Query(caps=["tool_call", "open_weights"], all_providers=True)
 
         # Act
         result = filter_models(SAMPLE_MODELS, query)
@@ -194,7 +200,7 @@ class TestFilterModels:
     def test_最大入力コストでフィルタできる(self):
         # Arrange
         # input cost <= 3.0 => sonnet(3.0), gpt-4o(2.5), llama(0.6)
-        query = Query(max_input_cost=3.0)
+        query = Query(max_input_cost=3.0, all_providers=True)
 
         # Act
         result = filter_models(SAMPLE_MODELS, query)
@@ -242,3 +248,86 @@ class TestFilterModels:
         assert len(result) == 1
         # cheapest anthropic model under $5 is sonnet at $3.0
         assert result[0]["full_id"] == "anthropic/claude-sonnet-4-6"
+
+
+class TestDefaultProviderFilter:
+    def test_デフォルトでは非主要プロバイダが除外される(self):
+        # Arrange
+        models_with_aggregator = [
+            *SAMPLE_MODELS,
+            {
+                "provider_id": "amazon-bedrock",
+                "provider_name": "Amazon Bedrock",
+                "full_id": "amazon-bedrock/claude-sonnet-4-6",
+                "name": "Claude Sonnet 4.6",
+                "cost": {"input": 3.0, "output": 15.0},
+                "limit": {"context": 200000, "output": 64000},
+            },
+            {
+                "provider_id": "qiniu-ai",
+                "provider_name": "Qiniu AI",
+                "full_id": "qiniu-ai/claude-sonnet-4-6",
+                "name": "Claude Sonnet 4.6",
+                "cost": {"input": 3.0, "output": 15.0},
+                "limit": {"context": 200000, "output": 64000},
+            },
+        ]
+        query = Query()
+
+        # Act
+        result = filter_models(models_with_aggregator, query)
+
+        # Assert
+        provider_ids = {m["provider_id"] for m in result}
+        assert "amazon-bedrock" not in provider_ids
+        assert "qiniu-ai" not in provider_ids
+        assert "anthropic" in provider_ids
+        assert "openai" in provider_ids
+
+    def test_all_providersで全プロバイダが含まれる(self):
+        # Arrange
+        models_with_aggregator = [
+            *SAMPLE_MODELS,
+            {
+                "provider_id": "amazon-bedrock",
+                "provider_name": "Amazon Bedrock",
+                "full_id": "amazon-bedrock/claude-sonnet-4-6",
+                "name": "Claude Sonnet 4.6",
+                "cost": {"input": 3.0, "output": 15.0},
+                "limit": {"context": 200000, "output": 64000},
+            },
+        ]
+        query = Query(all_providers=True)
+
+        # Act
+        result = filter_models(models_with_aggregator, query)
+
+        # Assert
+        assert len(result) == len(models_with_aggregator)
+
+    def test_provider指定時はデフォルトフィルタをスキップする(self):
+        # Arrange
+        models_with_aggregator = [
+            *SAMPLE_MODELS,
+            {
+                "provider_id": "amazon-bedrock",
+                "provider_name": "Amazon Bedrock",
+                "full_id": "amazon-bedrock/claude-sonnet-4-6",
+                "name": "Claude Sonnet 4.6",
+                "cost": {"input": 3.0, "output": 15.0},
+                "limit": {"context": 200000, "output": 64000},
+            },
+        ]
+        query = Query(provider="amazon-bedrock")
+
+        # Act
+        result = filter_models(models_with_aggregator, query)
+
+        # Assert
+        assert len(result) == 1
+        assert result[0]["provider_id"] == "amazon-bedrock"
+
+    def test_DEFAULT_PROVIDERSに主要プロバイダが含まれる(self):
+        # Assert
+        for provider in ["anthropic", "openai", "google", "deepseek", "mistral"]:
+            assert provider in DEFAULT_PROVIDERS
