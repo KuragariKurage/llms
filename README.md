@@ -1,8 +1,10 @@
 # llms
 
-[models.dev](https://models.dev/) のLLMモデルカタログをCLIからfuzzy searchできるツール。
+Fuzzy search LLM models from [models.dev](https://models.dev/) in your terminal.
 
-## デモ
+[日本語版 README はこちら](README.ja.md)
+
+## Demo
 
 ```
 $ llms
@@ -18,47 +20,53 @@ Model> claude-sonnet-4.6
 Copied: anthropic/claude-sonnet-4-6
 ```
 
-## インストール
+## Installation
 
-### 前提条件
+### Prerequisites
 
 - Python 3.13+
 - [fzf](https://github.com/junegunn/fzf)
 - [uv](https://github.com/astral-sh/uv)
 
-### グローバルインストール
+### Quick Install
+
+```bash
+./install.sh
+```
+
+### Manual Install
 
 ```bash
 uv tool install -e .
 ```
 
-これで `llms` コマンドがどこからでも使えるようになります。
+This makes the `llms` command available globally.
 
-## 使い方
+## Usage
 
 ```bash
-llms                  # fzf で検索 → Enter で model ID をクリップボードにコピー
-llms --refresh        # キャッシュを強制更新
-llms --no-copy        # コピーせず stdout に出力（パイプ用）
-llms --json           # 選択したモデルの詳細を JSON で出力
-llms -p anthropic     # プロバイダでフィルタ
+llms                  # Fuzzy search → Enter to copy model ID to clipboard
+llms --refresh        # Force refresh cache
+llms --no-copy        # Print model ID to stdout (for piping)
+llms --json           # Output selected model details as JSON
+llms -p anthropic     # Filter by provider
 ```
 
-### キー操作
+### Key Bindings
 
-| キー | 動作 |
-|------|------|
-| 文字入力 | fuzzy search |
-| 上下キー | モデル選択 |
-| Enter | model ID をクリップボードにコピー |
-| Ctrl-C | 終了 |
+| Key | Action |
+|-----|--------|
+| Type | Fuzzy search |
+| Up/Down | Navigate models |
+| Enter | Copy model ID to clipboard |
+| Ctrl-C | Exit |
 
-## データソース
+## Data Source
 
-[models.dev](https://models.dev/) の `/api.json` エンドポイントからモデル情報を取得します。
-データは `~/Library/Caches/llms/` に1時間キャッシュされます。
+Model data is fetched from the [models.dev](https://models.dev/) `/api.json` endpoint.
+Responses are cached locally for 1 hour at `~/Library/Caches/llms/`.
 
-## 開発
+## Development
 
 ```bash
 uv sync
