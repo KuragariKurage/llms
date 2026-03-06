@@ -31,7 +31,14 @@ def _add_filter_flags(parser: argparse.ArgumentParser) -> None:
         action="append",
         dest="caps",
         metavar="CAPABILITY",
-        help="Capability filter (repeatable)",
+        help="Capability filter (repeatable). Combined with AND by default (see --cap-mode)",
+    )
+    parser.add_argument(
+        "--cap-mode",
+        dest="cap_mode",
+        choices=["and", "or"],
+        default="and",
+        help="How to combine multiple --cap filters: 'and' (all must match) or 'or' (any must match). Default: and",
     )
     parser.add_argument(
         "--min-context",
@@ -45,9 +52,16 @@ def _add_filter_flags(parser: argparse.ArgumentParser) -> None:
         help="Maximum input cost per 1M tokens",
     )
     parser.add_argument(
-        "--sort", metavar="FIELD", help='Sort field (e.g. "cost.input")'
+        "--sort",
+        metavar="FIELD",
+        help='Sort field (e.g. "cost.input", "limit.context"). Use --sort-fields to see all options',
     )
     parser.add_argument("--limit", type=int, metavar="N", help="Max results")
+    parser.add_argument(
+        "--include-deprecated",
+        action="store_true",
+        help="Include deprecated models (excluded by default)",
+    )
 
 
 def _build_query(args: argparse.Namespace) -> Any:
@@ -62,11 +76,13 @@ def _build_query(args: argparse.Namespace) -> Any:
         provider=getattr(args, "provider", None),
         text=None,
         caps=getattr(args, "caps", None) or [],
+        cap_mode=getattr(args, "cap_mode", "and"),
         min_context=min_context,
         max_input_cost=getattr(args, "max_input_cost", None),
         sort=getattr(args, "sort", None),
         limit=getattr(args, "limit", None),
         all_providers=getattr(args, "all_providers", False),
+        include_deprecated=getattr(args, "include_deprecated", False),
     )
 
 
@@ -133,8 +149,12 @@ def _run_get(args: argparse.Namespace) -> None:
     client = Client(force_refresh=args.refresh)
     try:
         model = client.get(args.model_id)
-    except ModelNotFoundError:
+    except ModelNotFoundError as e:
         print(f"Model not found: {args.model_id}", file=sys.stderr)
+        if hasattr(e, "suggestions") and e.suggestions:
+            print("Did you mean?", file=sys.stderr)
+            for s in e.suggestions:
+                print(f"  - {s}", file=sys.stderr)
         sys.exit(2)
 
     if args.json:
@@ -146,6 +166,14 @@ def _run_get(args: argparse.Namespace) -> None:
 
 
 def _run_list(args: argparse.Namespace) -> None:
+    if getattr(args, "sort_fields", False):
+        from llms.query import SORTABLE_FIELDS
+
+        print("Available sort fields:")
+        for field, desc in SORTABLE_FIELDS:
+            print(f"  {field:<20s} {desc}")
+        return
+
     from llms.client import Client
 
     client = Client(force_refresh=args.refresh)
@@ -164,11 +192,13 @@ def _run_search(args: argparse.Namespace) -> None:
         provider=query.provider,
         text=args.query,
         caps=query.caps,
+        cap_mode=query.cap_mode,
         min_context=query.min_context,
         max_input_cost=query.max_input_cost,
         sort=query.sort,
         limit=query.limit,
         all_providers=query.all_providers,
+        include_deprecated=query.include_deprecated,
     )
     models = client.search(args.query, query)
     _print_models(models, args)
@@ -248,6 +278,11 @@ def main() -> None:
     )
     _add_output_flags(list_parser)
     _add_filter_flags(list_parser)
+    list_parser.add_argument(
+        "--sort-fields",
+        action="store_true",
+        help="Show available sort fields and exit",
+    )
 
     # search subcommand
     search_parser = subparsers.add_parser("search", help="Text search models")

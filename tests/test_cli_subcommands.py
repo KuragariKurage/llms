@@ -57,7 +57,23 @@ SAMPLE_RAW_DATA = {
                 "attachment": True,
                 "temperature": True,
                 "open_weights": False,
-                "modalities": {"input": ["text", "image", "audio"], "output": ["text"]},
+                "modalities": {
+                    "input": ["text", "image", "audio"],
+                    "output": ["text"],
+                },
+            },
+            "gpt-4-turbo": {
+                "name": "GPT-4 Turbo",
+                "family": "gpt-4",
+                "status": "deprecated",
+                "cost": {"input": 10.0, "output": 30.0},
+                "limit": {"context": 128000, "output": 4096},
+                "reasoning": False,
+                "tool_call": True,
+                "attachment": False,
+                "temperature": True,
+                "open_weights": False,
+                "modalities": {"input": ["text", "image"], "output": ["text"]},
             },
         },
     },
@@ -101,133 +117,188 @@ def _run_cli(args: list[str], capsys) -> tuple[str, str, int | None]:
 
 class TestGetSubcommand:
     def test_getサブコマンドでJSON出力(self, capsys):
-        # Arrange
         args = ["get", "anthropic/claude-sonnet-4-6", "--json"]
 
-        # Act
         out, _, exit_code = _run_cli(args, capsys)
 
-        # Assert
         assert exit_code is None or exit_code == 0
         model = json.loads(out)
         assert model["full_id"] == "anthropic/claude-sonnet-4-6"
         assert model["name"] == "Claude Sonnet 4.6"
 
     def test_getで存在しないモデルはエラー(self, capsys):
-        # Arrange
         args = ["get", "nonexistent/model-xyz", "--json"]
 
-        # Act
         _, _, exit_code = _run_cli(args, capsys)
 
-        # Assert
         assert exit_code != 0
+
+    def test_getでプロバイダ省略時にDid_you_meanが表示される(self, capsys):
+        args = ["get", "claude-sonnet-4-6", "--json"]
+
+        _, err, exit_code = _run_cli(args, capsys)
+
+        assert exit_code != 0
+        assert "Did you mean?" in err
 
 
 class TestListSubcommand:
     def test_listサブコマンドでモデル一覧(self, capsys):
-        # Arrange
+        # deprecated is excluded by default, so 4 active models
         args = ["list", "--all", "--json"]
 
-        # Act
         out, _, exit_code = _run_cli(args, capsys)
 
-        # Assert
         assert exit_code is None or exit_code == 0
         models = json.loads(out)
         assert len(models) == 4
 
     def test_listでcapフィルタ(self, capsys):
-        # Arrange
         args = ["list", "--cap", "reasoning", "--json"]
 
-        # Act
         out, _, exit_code = _run_cli(args, capsys)
 
-        # Assert
         assert exit_code is None or exit_code == 0
         models = json.loads(out)
         assert len(models) == 1
         assert models[0]["full_id"] == "anthropic/claude-opus-4-6"
 
     def test_listでmin_contextフィルタ(self, capsys):
-        # Arrange
         args = ["list", "--min-context", "200k", "--json"]
 
-        # Act
         out, _, exit_code = _run_cli(args, capsys)
 
-        # Assert
         assert exit_code is None or exit_code == 0
         models = json.loads(out)
         assert len(models) == 2
         assert all(m["provider_id"] == "anthropic" for m in models)
 
     def test_listでmax_input_costフィルタ(self, capsys):
-        # Arrange
         args = ["list", "--all", "--max-input-cost", "3.0", "--json"]
 
-        # Act
         out, _, exit_code = _run_cli(args, capsys)
 
-        # Assert
         assert exit_code is None or exit_code == 0
         models = json.loads(out)
-        # sonnet(3.0), gpt-4o(2.5), llama(0.6) => 3 models
+        # sonnet(3.0), gpt-4o(2.5), llama(0.6) => 3 models (deprecated excluded)
         assert len(models) == 3
         full_ids = {m["full_id"] for m in models}
         assert "anthropic/claude-opus-4-6" not in full_ids
 
     def test_listでsort(self, capsys):
-        # Arrange
         args = ["list", "--sort", "cost.input", "--json"]
 
-        # Act
         out, _, exit_code = _run_cli(args, capsys)
 
-        # Assert
         assert exit_code is None or exit_code == 0
         models = json.loads(out)
         costs = [m["cost"]["input"] for m in models]
         assert costs == sorted(costs)
 
     def test_listでlimit(self, capsys):
-        # Arrange
         args = ["list", "--limit", "2", "--json"]
 
-        # Act
         out, _, exit_code = _run_cli(args, capsys)
 
-        # Assert
         assert exit_code is None or exit_code == 0
         models = json.loads(out)
         assert len(models) == 2
 
+    def test_listでcap_modeオプションがOR指定で動く(self, capsys):
+        args = [
+            "list",
+            "--all",
+            "--cap",
+            "reasoning",
+            "--cap",
+            "open_weights",
+            "--cap-mode",
+            "or",
+            "--json",
+        ]
+
+        out, _, exit_code = _run_cli(args, capsys)
+
+        assert exit_code is None or exit_code == 0
+        models = json.loads(out)
+        assert len(models) == 2
+        full_ids = {m["full_id"] for m in models}
+        assert "anthropic/claude-opus-4-6" in full_ids
+        assert "meta/llama-3.3-70b" in full_ids
+
+    def test_listで_sort_fieldsオプションでフィールド一覧が表示される(self, capsys):
+        args = ["list", "--sort-fields"]
+
+        out, _, exit_code = _run_cli(args, capsys)
+
+        assert exit_code is None or exit_code == 0
+        assert "cost.input" in out
+        assert "limit.context" in out
+        assert "Available sort fields:" in out
+
+    def test_listで_sort_fieldsは他のフィルタより先に処理される(self, capsys):
+        args = ["list", "--sort-fields"]
+
+        out, _, exit_code = _run_cli(args, capsys)
+
+        assert exit_code is None or exit_code == 0
+        assert "anthropic/claude-sonnet-4-6" not in out
+        assert "Available sort fields:" in out
+
+    def test_listでdeprecatedモデルがデフォルトで除外される(self, capsys):
+        args = ["list", "--all", "--json"]
+
+        out, _, exit_code = _run_cli(args, capsys)
+
+        assert exit_code is None or exit_code == 0
+        models = json.loads(out)
+        full_ids = {m["full_id"] for m in models}
+        assert "openai/gpt-4-turbo" not in full_ids
+
+    def test_listでinclude_deprecatedフラグでdeprecatedモデルが含まれる(self, capsys):
+        args = ["list", "--all", "--include-deprecated", "--json"]
+
+        out, _, exit_code = _run_cli(args, capsys)
+
+        assert exit_code is None or exit_code == 0
+        models = json.loads(out)
+        assert len(models) == 5
+        full_ids = {m["full_id"] for m in models}
+        assert "openai/gpt-4-turbo" in full_ids
+
 
 class TestSearchSubcommand:
     def test_searchサブコマンド(self, capsys):
-        # Arrange
         args = ["search", "claude", "--json"]
 
-        # Act
         out, _, exit_code = _run_cli(args, capsys)
 
-        # Assert
         assert exit_code is None or exit_code == 0
         models = json.loads(out)
         assert len(models) == 2
         assert all("claude" in m["full_id"] for m in models)
 
+    def test_searchでJSON出力にマッチ情報が含まれる(self, capsys):
+        args = ["search", "claude", "--json"]
+
+        out, _, exit_code = _run_cli(args, capsys)
+
+        assert exit_code is None or exit_code == 0
+        models = json.loads(out)
+        assert len(models) >= 1
+        for model in models:
+            assert "_match_score" in model
+            assert "_matched_fields" in model
+            assert isinstance(model["_match_score"], int)
+            assert isinstance(model["_matched_fields"], list)
+
 
 class TestProvidersSubcommand:
     def test_providersサブコマンド(self, capsys):
-        # Arrange
         args = ["providers", "--json"]
 
-        # Act
         out, _, exit_code = _run_cli(args, capsys)
 
-        # Assert
         assert exit_code is None or exit_code == 0
         providers = json.loads(out)
         assert len(providers) == 3
@@ -239,9 +310,6 @@ class TestProvidersSubcommand:
 
 class TestBackwardCompatibility:
     def test_サブコマンドなしは後方互換(self, mocker, capsys):
-        # Arrange
-        # No subcommand → should attempt fzf interactive mode (backward compat path)
-        # Patch run_fzf at the cli import site to prevent actual fzf launch
         mocker.patch("llms.cli.get_preview_command", return_value="echo")
         mock_run_fzf = mocker.patch(
             "llms.cli.run_fzf",
@@ -252,5 +320,4 @@ class TestBackwardCompatibility:
         with pytest.raises(Exception, match="fzf not available in test"):
             main()
 
-        # Assert: run_fzf was called, confirming the backward-compat pick path ran
         assert mock_run_fzf.called
