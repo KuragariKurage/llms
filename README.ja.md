@@ -20,31 +20,32 @@ Copied: anthropic/claude-sonnet-4-6
 
 ## インストール
 
-### 前提条件
+### Homebrew (macOS)
 
-- Python 3.13+
-- [fzf](https://github.com/junegunn/fzf)（インタラクティブモード用）
+```bash
+brew tap KuragariKurage/llms
+brew install llms
+```
 
-### インストール
+`llms` と fzf がまとめてインストールされます。
+
+### PyPI
 
 ```bash
 # uv（推奨）
-uv tool install -e .
+uv tool install llms-dev
 
 # pipx
-pipx install -e .
-
-# pip
-pip install -e .
+pipx install llms-dev
 ```
 
-または `./install.sh` を実行すると、利用可能なインストーラを自動検出します。
+前提条件: Python 3.13+, [fzf](https://github.com/junegunn/fzf)（インタラクティブモード用）
 
 #### GitHub から直接インストール（clone 不要）
 
 ```bash
-uv tool install git+https://github.com/atsuya.sakata/llm-models.git
-pipx install git+https://github.com/atsuya.sakata/llm-models.git
+uv tool install git+https://github.com/KuragariKurage/llms.git
+pipx install git+https://github.com/KuragariKurage/llms.git
 ```
 
 これで `llms` コマンドがどこからでも使えるようになります。
