@@ -1,12 +1,23 @@
 [project]
-name = "llms"
+name = "llms-dev"
 version = "0.1.0"
 description = "Fuzzy search LLM models from models.dev"
 readme = "README.md"
+license = "MIT"
 authors = [
     { name = "KuragariKurage", email = "22191637+KuragariKurage@users.noreply.github.com" }
 ]
 requires-python = ">=3.13"
+keywords = ["llm", "models", "cli", "fzf", "ai"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Utilities",
+]
 dependencies = [
     "httpx>=0.28",
     "platformdirs>=4.0",
@@ -22,9 +33,17 @@ dev = [
     "ruff>=0.8",
 ]
 
+[project.urls]
+Homepage = "https://github.com/KuragariKurage/llms"
+Repository = "https://github.com/KuragariKurage/llms"
+Issues = "https://github.com/KuragariKurage/llms/issues"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/llms"]
 
 [tool.ruff]
 target-version = "py313"
