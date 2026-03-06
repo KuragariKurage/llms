@@ -2,13 +2,31 @@ from __future__ import annotations
 
 from llms.query import (
     DEFAULT_PROVIDERS,
+    SORTABLE_FIELDS,
     Query,
     _get_nested,
     _parse_token_count,
     filter_models,
+    search_models,
 )
 
 SAMPLE_MODELS = [
+    {
+        "provider_id": "openai",
+        "provider_name": "OpenAI",
+        "full_id": "openai/gpt-4-turbo",
+        "name": "GPT-4 Turbo",
+        "family": "gpt-4",
+        "status": "deprecated",
+        "cost": {"input": 10.0, "output": 30.0},
+        "limit": {"context": 128000, "output": 4096},
+        "reasoning": False,
+        "tool_call": True,
+        "attachment": False,
+        "temperature": True,
+        "open_weights": False,
+        "modalities": {"input": ["text", "image"], "output": ["text"]},
+    },
     {
         "provider_id": "anthropic",
         "provider_name": "Anthropic",
@@ -185,6 +203,26 @@ class TestFilterModels:
         assert len(result) == 1
         assert result[0]["full_id"] == "meta/llama-3.3-70b"
 
+    def test_複数ケイパビリティをOR条件でフィルタできる(self):
+        # Arrange
+        query = Query(
+            caps=["reasoning", "open_weights"], cap_mode="or", all_providers=True
+        )
+
+        # Act
+        result = filter_models(SAMPLE_MODELS, query)
+
+        # Assert
+        assert len(result) == 2
+        full_ids = {m["full_id"] for m in result}
+        assert "anthropic/claude-opus-4-6" in full_ids
+        assert "meta/llama-3.3-70b" in full_ids
+
+    def test_capモードのデフォルトはAND(self):
+        # Assert
+        query = Query()
+        assert query.cap_mode == "and"
+
     def test_最小コンテキストでフィルタできる(self):
         # Arrange
         # context >= 200000 => anthropic models only
@@ -233,7 +271,6 @@ class TestFilterModels:
 
     def test_複合フィルタが機能する(self):
         # Arrange
-        # provider=anthropic, max_input_cost=5.0, sort=cost.input, limit=1
         query = Query(
             provider="anthropic",
             max_input_cost=5.0,
@@ -246,8 +283,111 @@ class TestFilterModels:
 
         # Assert
         assert len(result) == 1
-        # cheapest anthropic model under $5 is sonnet at $3.0
         assert result[0]["full_id"] == "anthropic/claude-sonnet-4-6"
+
+
+class TestDeprecatedFilter:
+    def test_deprecatedモデルがデフォルトで除外される(self):
+        # Arrange
+        query = Query(all_providers=True)
+
+        # Act
+        result = filter_models(SAMPLE_MODELS, query)
+
+        # Assert
+        full_ids = {m["full_id"] for m in result}
+        assert "openai/gpt-4-turbo" not in full_ids
+
+    def test_include_deprecatedでdeprecatedモデルが含まれる(self):
+        # Arrange
+        query = Query(all_providers=True, include_deprecated=True)
+
+        # Act
+        result = filter_models(SAMPLE_MODELS, query)
+
+        # Assert
+        full_ids = {m["full_id"] for m in result}
+        assert "openai/gpt-4-turbo" in full_ids
+
+    def test_statusフィールドがないモデルは除外されない(self):
+        # Arrange
+        query = Query(provider="anthropic")
+
+        # Act
+        result = filter_models(SAMPLE_MODELS, query)
+
+        # Assert
+        assert len(result) == 2
+        assert all(m["provider_id"] == "anthropic" for m in result)
+
+
+class TestSearchModels:
+    def test_search_modelsでマッチスコアが付与される(self):
+        # Arrange
+        query = Query(text="gpt-4o", all_providers=True)
+
+        # Act
+        result = search_models(SAMPLE_MODELS, query)
+
+        # Assert
+        assert len(result) == 1
+        assert "_match_score" in result[0]
+        assert "_matched_fields" in result[0]
+        assert isinstance(result[0]["_match_score"], int)
+        assert isinstance(result[0]["_matched_fields"], list)
+
+    def test_search_modelsでexact_matchが最高スコア(self):
+        # Arrange
+        query = Query(text="openai/gpt-4o", all_providers=True)
+
+        # Act
+        result = search_models(SAMPLE_MODELS, query)
+
+        # Assert
+        assert len(result) == 1
+        assert result[0]["full_id"] == "openai/gpt-4o"
+        assert result[0]["_match_score"] == 100
+
+    def test_search_modelsで複数フィールドマッチ(self):
+        # Arrange
+        query = Query(text="claude", all_providers=True)
+
+        # Act
+        result = search_models(SAMPLE_MODELS, query)
+
+        # Assert
+        assert len(result) == 2
+        for m in result:
+            assert "_matched_fields" in m
+            assert len(m["_matched_fields"]) >= 2
+
+    def test_search_modelsでスコア順にソートされる(self):
+        # Arrange
+        models = [
+            {
+                "provider_id": "anthropic",
+                "full_id": "anthropic/claude-sonnet",
+                "name": "claude-sonnet",
+                "family": "claude",
+                "id": "claude-sonnet",
+            },
+            {
+                "provider_id": "anthropic",
+                "full_id": "anthropic/claude-sonnet-extra",
+                "name": "Claude Sonnet Extra (contains claude-sonnet)",
+                "family": "claude",
+                "id": "claude-sonnet-extra",
+            },
+        ]
+        query = Query(text="claude-sonnet", all_providers=True)
+
+        # Act
+        result = search_models(models, query)
+
+        # Assert
+        assert len(result) == 2
+        assert result[0]["_match_score"] >= result[1]["_match_score"]
+        assert result[0]["full_id"] == "anthropic/claude-sonnet"
 
 
 class TestDefaultProviderFilter:
@@ -297,7 +437,7 @@ class TestDefaultProviderFilter:
                 "limit": {"context": 200000, "output": 64000},
             },
         ]
-        query = Query(all_providers=True)
+        query = Query(all_providers=True, include_deprecated=True)
 
         # Act
         result = filter_models(models_with_aggregator, query)
@@ -331,3 +471,27 @@ class TestDefaultProviderFilter:
         # Assert
         for provider in ["anthropic", "openai", "google", "deepseek", "mistral"]:
             assert provider in DEFAULT_PROVIDERS
+
+
+class TestSortableFields:
+    def test_SORTABLE_FIELDSに主要フィールドが含まれる(self):
+        # Arrange
+        field_names = [name for name, _ in SORTABLE_FIELDS]
+
+        # Assert
+        assert "cost.input" in field_names
+        assert "cost.output" in field_names
+        assert "limit.context" in field_names
+        assert "limit.output" in field_names
+        assert "name" in field_names
+        assert "release_date" in field_names
+
+    def test_SORTABLE_FIELDSの各エントリはタプル形式(self):
+        # Assert
+        for entry in SORTABLE_FIELDS:
+            assert isinstance(entry, tuple)
+            assert len(entry) == 2
+            field_name, description = entry
+            assert isinstance(field_name, str)
+            assert isinstance(description, str)
+            assert len(description) > 0

@@ -55,7 +55,10 @@ SAMPLE_RAW_DATA = {
                 "attachment": True,
                 "temperature": True,
                 "open_weights": False,
-                "modalities": {"input": ["text", "image", "audio"], "output": ["text"]},
+                "modalities": {
+                    "input": ["text", "image", "audio"],
+                    "output": ["text"],
+                },
             },
         },
     },
@@ -161,3 +164,94 @@ class TestClient:
         for p in providers:
             assert "id" in p
             assert "name" in p
+
+
+class TestFuzzyMatch:
+    def test_getでプロバイダ省略時にサジェストが表示される(self, mocker):
+        # Arrange
+        mocker.patch("llms.client.fetch_models", return_value=SAMPLE_RAW_DATA)
+        client = Client()
+
+        # Act & Assert
+        with pytest.raises(ModelNotFoundError) as exc_info:
+            client.get("claude-sonnet-4-6")
+
+        error = exc_info.value
+        assert hasattr(error, "suggestions")
+        assert len(error.suggestions) > 0
+        assert "anthropic/claude-sonnet-4-6" in error.suggestions
+
+    def test_getでサジェストが空の場合はシンプルなエラー(self, mocker):
+        # Arrange
+        mocker.patch("llms.client.fetch_models", return_value=SAMPLE_RAW_DATA)
+        client = Client()
+
+        # Act & Assert
+        with pytest.raises(ModelNotFoundError) as exc_info:
+            client.get("completely-unknown-xyz")
+
+        error = exc_info.value
+        assert hasattr(error, "suggestions")
+        assert error.suggestions == []
+
+    def test_find_similar_modelsでsuffix_matchが優先される(self, mocker):
+        # Arrange
+        raw_data = {
+            "anthropic": {
+                "name": "Anthropic",
+                "models": {
+                    "claude-sonnet-4-6": {
+                        "name": "Claude Sonnet 4.6",
+                        "family": "claude",
+                        "cost": {"input": 3.0, "output": 15.0},
+                        "limit": {"context": 200000, "output": 64000},
+                        "reasoning": False,
+                        "tool_call": True,
+                        "attachment": True,
+                        "temperature": True,
+                        "open_weights": False,
+                        "modalities": {"input": ["text"], "output": ["text"]},
+                    },
+                },
+            },
+            "amazon-bedrock": {
+                "name": "Amazon Bedrock",
+                "models": {
+                    "claude-sonnet-4-6": {
+                        "name": "Claude Sonnet 4.6 (Bedrock)",
+                        "family": "claude",
+                        "cost": {"input": 3.0, "output": 15.0},
+                        "limit": {"context": 200000, "output": 64000},
+                        "reasoning": False,
+                        "tool_call": True,
+                        "attachment": True,
+                        "temperature": True,
+                        "open_weights": False,
+                        "modalities": {"input": ["text"], "output": ["text"]},
+                    },
+                    "sonnet-extra": {
+                        "name": "Sonnet Extra",
+                        "family": "claude",
+                        "cost": {"input": 3.0, "output": 15.0},
+                        "limit": {"context": 200000, "output": 64000},
+                        "reasoning": False,
+                        "tool_call": True,
+                        "attachment": True,
+                        "temperature": True,
+                        "open_weights": False,
+                        "modalities": {"input": ["text"], "output": ["text"]},
+                    },
+                },
+            },
+        }
+        mocker.patch("llms.client.fetch_models", return_value=raw_data)
+        client = Client()
+
+        # Act
+        suggestions = client.find_similar_models("claude-sonnet-4-6")
+
+        # Assert
+        assert "anthropic/claude-sonnet-4-6" in suggestions
+        assert "amazon-bedrock/claude-sonnet-4-6" in suggestions
+        assert "amazon-bedrock/sonnet-extra" not in suggestions
+        assert suggestions == sorted(suggestions)
