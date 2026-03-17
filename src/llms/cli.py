@@ -6,8 +6,8 @@ import sys
 from typing import Any
 
 from llms.clipboard import copy_to_clipboard
-from llms.formatter import format_fzf_lines, format_preview
-from llms.selector import FzfNotFoundError, get_preview_command, run_fzf
+from llms.formatter import format_comparison, format_fzf_lines, format_preview
+from llms.selector import FzfNotFoundError, get_preview_command, run_fzf, run_fzf_multi
 
 
 def _add_output_flags(parser: argparse.ArgumentParser) -> None:
@@ -204,6 +204,41 @@ def _run_search(args: argparse.Namespace) -> None:
     _print_models(models, args)
 
 
+def _run_compare(args: argparse.Namespace) -> None:
+    from llms.client import Client
+
+    client = Client(force_refresh=getattr(args, "refresh", False))
+    query = _build_query(args)
+    models = client.list(query)
+
+    if not models:
+        print("No models found.", file=sys.stderr)
+        sys.exit(1)
+
+    lines = format_fzf_lines(models)
+
+    try:
+        preview_cmd = get_preview_command()
+        selected_ids = run_fzf_multi(lines, limit=2, preview_cmd=preview_cmd)
+    except FzfNotFoundError as e:
+        print(str(e), file=sys.stderr)
+        sys.exit(1)
+
+    if len(selected_ids) < 2:
+        if selected_ids:
+            print("Please select 2 models to compare.", file=sys.stderr)
+        sys.exit(0)
+
+    model_a = client.get(selected_ids[0])
+    model_b = client.get(selected_ids[1])
+
+    if getattr(args, "json", False):
+        print(json.dumps([model_a, model_b], indent=2, ensure_ascii=False))
+        return
+
+    print(format_comparison(model_a, model_b))
+
+
 def _run_providers(args: argparse.Namespace) -> None:
     from llms.client import Client
 
@@ -290,6 +325,25 @@ def main() -> None:
     _add_output_flags(search_parser)
     _add_filter_flags(search_parser)
 
+    # compare subcommand
+    compare_parser = subparsers.add_parser(
+        "compare", help="Compare two models side by side (interactive fzf)"
+    )
+    compare_parser.add_argument("-p", "--provider", help="Filter by provider")
+    compare_parser.add_argument(
+        "-a",
+        "--all",
+        action="store_true",
+        dest="all_providers",
+        help="Show models from all providers",
+    )
+    compare_parser.add_argument(
+        "--json", action="store_true", help="Output comparison as JSON"
+    )
+    compare_parser.add_argument(
+        "--refresh", action="store_true", help="Force cache refresh"
+    )
+
     # providers subcommand
     providers_parser = subparsers.add_parser("providers", help="List providers")
     providers_parser.add_argument("--json", action="store_true", help="Output as JSON")
@@ -311,6 +365,8 @@ def main() -> None:
         _run_list(args)
     elif command == "search":
         _run_search(args)
+    elif command == "compare":
+        _run_compare(args)
     elif command == "providers":
         _run_providers(args)
     else:

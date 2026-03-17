@@ -1,6 +1,7 @@
 from llms.formatter import (
     _format_cost,
     _format_tokens,
+    format_comparison,
     format_fzf_line,
     format_preview,
 )
@@ -72,3 +73,51 @@ class TestFormatPreview:
         assert "200K" in preview
         assert "claude-opus" in preview
         assert "2025-03-31" in preview
+
+
+class TestFormatComparison:
+    def test_比較出力に両モデルの情報が含まれる(self, sample_api_data):
+        from llms.fetcher import flatten_models
+
+        models = flatten_models(sample_api_data)
+        model_a = next(
+            m for m in models if m["full_id"] == "anthropic/claude-opus-4-5-20251101"
+        )
+        model_b = next(m for m in models if m["full_id"] == "openai/gpt-4o")
+
+        result = format_comparison(model_a, model_b)
+
+        assert "Claude Opus 4.5" in result
+        assert "GPT-4o" in result
+        assert "Anthropic" in result
+        assert "OpenAI" in result
+        assert "$5.00" in result
+        assert "$2.50" in result
+        assert "200K" in result
+        assert "128K" in result
+
+    def test_比較でCapabilitiesの差分が表示される(self, sample_api_data):
+        from llms.fetcher import flatten_models
+
+        models = flatten_models(sample_api_data)
+        model_a = next(
+            m for m in models if m["full_id"] == "anthropic/claude-opus-4-5-20251101"
+        )
+        model_b = next(m for m in models if m["full_id"] == "openai/gpt-4o")
+
+        result = format_comparison(model_a, model_b)
+
+        assert "Reasoning:" in result
+        assert "Tool Call:" in result
+
+    def test_同じモデル同士の比較も動作する(self, sample_api_data):
+        from llms.fetcher import flatten_models
+
+        models = flatten_models(sample_api_data)
+        model = next(
+            m for m in models if m["full_id"] == "anthropic/claude-opus-4-5-20251101"
+        )
+
+        result = format_comparison(model, model)
+
+        assert "Claude Opus 4.5" in result
