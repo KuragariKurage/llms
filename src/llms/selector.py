@@ -64,6 +64,57 @@ def run_fzf(lines: str, preview_cmd: str | None = None) -> str | None:
     return selected
 
 
+def run_fzf_multi(
+    lines: str, *, limit: int = 2, preview_cmd: str | None = None
+) -> list[str]:
+    """Run fzf in multi-select mode and return selected items."""
+    fzf = ensure_fzf()
+
+    args = [
+        fzf,
+        "--reverse",
+        "--multi",
+        str(limit),
+        "--prompt",
+        "Compare> ",
+        "--header",
+        f"Tab: select (max {limit}) | Enter: compare | Ctrl-C: exit",
+        "--layout",
+        "reverse",
+        "--info",
+        "inline",
+    ]
+
+    if preview_cmd:
+        args.extend(
+            [
+                "--preview",
+                preview_cmd,
+                "--preview-window",
+                "right:50%:wrap",
+            ]
+        )
+
+    try:
+        result = subprocess.run(
+            args,
+            input=lines.encode(),
+            stdout=subprocess.PIPE,
+            check=False,
+        )
+    except FileNotFoundError as err:
+        raise FzfNotFoundError("fzf not found") from err
+
+    if result.returncode != 0:
+        return []
+
+    selected = result.stdout.decode().strip()
+    if not selected:
+        return []
+
+    return selected.splitlines()
+
+
 def get_preview_command() -> str:
     python = sys.executable
     return f"{python} -m llms --preview {{}}"

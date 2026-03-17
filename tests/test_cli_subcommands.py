@@ -308,6 +308,57 @@ class TestProvidersSubcommand:
         assert "meta" in provider_ids
 
 
+class TestCompareSubcommand:
+    def test_compareでfzfマルチセレクトが呼ばれる(self, mocker, capsys):
+        mocker.patch("llms.cli.get_preview_command", return_value="echo")
+        mock_fzf_multi = mocker.patch(
+            "llms.cli.run_fzf_multi",
+            return_value=["anthropic/claude-sonnet-4-6", "openai/gpt-4o"],
+        )
+
+        out, _, exit_code = _run_cli(["compare"], capsys)
+
+        assert exit_code is None or exit_code == 0
+        assert mock_fzf_multi.called
+        assert "Claude Sonnet 4.6" in out
+        assert "GPT-4o" in out
+
+    def test_compareでJSON出力(self, mocker, capsys):
+        mocker.patch("llms.cli.get_preview_command", return_value="echo")
+        mocker.patch(
+            "llms.cli.run_fzf_multi",
+            return_value=["anthropic/claude-sonnet-4-6", "openai/gpt-4o"],
+        )
+
+        out, _, exit_code = _run_cli(["compare", "--json"], capsys)
+
+        assert exit_code is None or exit_code == 0
+        models = json.loads(out)
+        assert len(models) == 2
+        assert models[0]["full_id"] == "anthropic/claude-sonnet-4-6"
+        assert models[1]["full_id"] == "openai/gpt-4o"
+
+    def test_compareで1つしか選ばないとメッセージ表示(self, mocker, capsys):
+        mocker.patch("llms.cli.get_preview_command", return_value="echo")
+        mocker.patch(
+            "llms.cli.run_fzf_multi",
+            return_value=["anthropic/claude-sonnet-4-6"],
+        )
+
+        _, err, exit_code = _run_cli(["compare"], capsys)
+
+        assert exit_code == 0
+        assert "Please select 2 models" in err
+
+    def test_compareで何も選ばないと終了(self, mocker, capsys):
+        mocker.patch("llms.cli.get_preview_command", return_value="echo")
+        mocker.patch("llms.cli.run_fzf_multi", return_value=[])
+
+        _, _, exit_code = _run_cli(["compare"], capsys)
+
+        assert exit_code == 0
+
+
 class TestBackwardCompatibility:
     def test_サブコマンドなしは後方互換(self, mocker, capsys):
         mocker.patch("llms.cli.get_preview_command", return_value="echo")
